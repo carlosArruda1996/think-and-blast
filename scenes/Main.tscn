@@ -1,0 +1,21 @@
+[gd_scene format=3 uid="uid://bejx3dqriunyo"]
+
+[ext_resource type="Script" uid="uid://dqf8vua3un6g0" path="res://scripts/main/Main.gd" id="1_elqb8"]
+[ext_resource type="Script" uid="uid://dmgvwhv82m4o8" path="res://scripts/map/level_1.gd" id="2_rvslj"]
+
+[sub_resource type="TileSet" id="TileSet_aik7u"]
+
+[node name="Main" type="Node2D" unique_id=1503430255]
+script = ExtResource("1_elqb8")
+
+[node name="Level1" type="Node2D" parent="." unique_id=1641699066 groups=["level"]]
+position = Vector2(3, -3)
+script = ExtResource("2_rvslj")
+
+[node name="Ground" type="TileMapLayer" parent="Level1" unique_id=1344118978 groups=["level"]]
+position = Vector2(0, 1)
+tile_set = SubResource("TileSet_aik7u")
+
+[node name="Wall" type="TileMapLayer" parent="Level1" unique_id=207046081 groups=["level"]]
+
+[node name="Destructible" type="TileMapLayer" parent="Level1" unique_id=1770386819 groups=["level"]]
