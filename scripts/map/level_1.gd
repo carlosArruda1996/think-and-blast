@@ -1,16 +1,16 @@
 extends Node2D
 
 
-# =========================================================
-# CONFIGURAÇÃO DO NÍVEL
-# =========================================================
+# ============================================================
+# CONFIGURAÇÃO
+# ============================================================
 
 var config := LevelConfig.new()
 
 
-# =========================================================
-# CONFIGURAÇÕES LOCAIS DO LEVEL
-# =========================================================
+# ============================================================
+# CONSTANTES
+# ============================================================
 
 const CELL_SIZE: int = 32
 
@@ -18,47 +18,58 @@ const PLAYER_SCENE = preload(
 	"res://scenes/player/player.tscn"
 )
 
+const POWER_UP_SCENE = preload(
+	"res://scenes/items/PowerUp.tscn"
+)
 
-# =========================================================
+
+# ============================================================
 # ESTADO DO NÍVEL
-# =========================================================
+# ============================================================
 
 var lives: int
-
 var map_data: MapData
-
 var spawn_cell := Vector2i(1, 1)
 
+var power_ups_spawned: int = 0
 
-# =========================================================
+
+# ============================================================
 # INICIALIZAÇÃO
-# =========================================================
+# ============================================================
+
 func _ready():
+
 	add_to_group("level")
+
 	lives = config.MAX_LIVES
+
 	generate_valid_map()
+
 	queue_redraw()
+
 	spawn_player()
-	spawn_test_power_up()
 
 
-# =========================================================
-# MAPA
-# =========================================================
+# ============================================================
+# GERAR MAPA VÁLIDO
+# ============================================================
 
 func generate_valid_map():
 
-	var generator = MapGenerator.new()
-	var validator = MapValidator.new()
+	var generator := MapGenerator.new()
+	var validator := MapValidator.new()
 
 	var attempts: int = 0
 	var max_attempts: int = 100
+
+	power_ups_spawned = 0
 
 	while attempts < max_attempts:
 
 		attempts += 1
 
-		var generated_map = generator.generate(config)
+		var generated_map: MapData = generator.generate(config)
 
 		if validator.is_valid(generated_map):
 
@@ -72,10 +83,13 @@ func generate_valid_map():
 			return
 
 	print(
-		"❌ Não foi possível gerar "
-		+ "um mapa válido."
+		"❌ Não foi possível gerar um mapa válido."
 	)
 
+
+# ============================================================
+# ALTERAR CÉLULA DO MAPA
+# ============================================================
 
 func set_map_cell(
 	x: int,
@@ -95,6 +109,10 @@ func set_map_cell(
 	refresh_map()
 
 
+# ============================================================
+# OBTER CÉLULA DO MAPA
+# ============================================================
+
 func get_map_cell(
 	x: int,
 	y: int
@@ -109,14 +127,66 @@ func get_map_cell(
 	)
 
 
+# ============================================================
+# ATUALIZAR MAPA
+# ============================================================
+
 func refresh_map():
 
 	queue_redraw()
 
 
-# =========================================================
+# ============================================================
+# POWER-UPS
+# ============================================================
+
+func try_spawn_power_up(
+	cell: Vector2i
+):
+
+	if power_ups_spawned >= config.POWER_UP_COUNT:
+
+		print(
+			"🎴 Limite de Power-Ups atingido: ",
+			config.POWER_UP_COUNT
+		)
+
+		return
+
+
+	var power_up = POWER_UP_SCENE.instantiate()
+
+	if power_up == null:
+
+		print(
+			"❌ ERRO: PowerUp.tscn não pôde ser instanciado!"
+		)
+
+		return
+
+
+	power_up.position = cell_to_world(cell)
+
+	add_child(power_up)
+
+	power_ups_spawned += 1
+
+	print(
+		"🎴 POWER-UP GERADO EM: ",
+		cell
+	)
+
+	print(
+		"🎴 Power-Ups no nível: ",
+		power_ups_spawned,
+		"/",
+		config.POWER_UP_COUNT
+	)
+
+
+# ============================================================
 # JOGADOR
-# =========================================================
+# ============================================================
 
 func spawn_player():
 
@@ -131,22 +201,23 @@ func spawn_player():
 	add_child(player)
 
 
+# ============================================================
+# CÉLULA → MUNDO
+# ============================================================
+
 func cell_to_world(
 	cell: Vector2i
 ) -> Vector2:
 
 	return Vector2(
-		cell.x * CELL_SIZE
-		+ CELL_SIZE / 2,
-
-		cell.y * CELL_SIZE
-		+ CELL_SIZE / 2
+		cell.x * CELL_SIZE + CELL_SIZE / 2,
+		cell.y * CELL_SIZE + CELL_SIZE / 2
 	)
 
 
-# =========================================================
-# MOVIMENTO
-# =========================================================
+# ============================================================
+# MOVIMENTAÇÃO
+# ============================================================
 
 func is_position_walkable(
 	position: Vector2
@@ -155,27 +226,27 @@ func is_position_walkable(
 	if map_data == null:
 		return false
 
-	var cell_x = floori(
+	var cell_x: int = floori(
 		position.x / CELL_SIZE
 	)
 
-	var cell_y = floori(
+	var cell_y: int = floori(
 		position.y / CELL_SIZE
 	)
 
-	if (
-		cell_x < 0
-		or cell_x >= config.MAP_WIDTH
-	):
+	if cell_x < 0:
 		return false
 
-	if (
-		cell_y < 0
-		or cell_y >= config.MAP_HEIGHT
-	):
+	if cell_x >= config.MAP_WIDTH:
 		return false
 
-	var cell_type = map_data.get_cell(
+	if cell_y < 0:
+		return false
+
+	if cell_y >= config.MAP_HEIGHT:
+		return false
+
+	var cell_type: String = map_data.get_cell(
 		cell_x,
 		cell_y
 	)
@@ -183,7 +254,6 @@ func is_position_walkable(
 	if cell_type != ".":
 		return false
 
-	# Verifica se existe uma bomba nessa célula
 	if is_cell_occupied_by_bomb(
 		Vector2i(
 			cell_x,
@@ -195,30 +265,29 @@ func is_position_walkable(
 	return true
 
 
-# =========================================================
-# BOMBA
-# =========================================================
+# ============================================================
+# VERIFICAR BOMBA NA CÉLULA
+# ============================================================
 
 func is_cell_occupied_by_bomb(
 	cell: Vector2i
 ) -> bool:
 
-	for bomb in get_tree().get_nodes_in_group(
+	var bombs := get_tree().get_nodes_in_group(
 		"bomb"
-	):
+	)
+
+	for bomb in bombs:
 
 		if not is_instance_valid(bomb):
 			continue
 
-		var bomb_cell = Vector2i(
+		var bomb_cell := Vector2i(
 			floori(
-				bomb.position.x
-				/ CELL_SIZE
+				bomb.position.x / CELL_SIZE
 			),
-
 			floori(
-				bomb.position.y
-				/ CELL_SIZE
+				bomb.position.y / CELL_SIZE
 			)
 		)
 
@@ -228,9 +297,9 @@ func is_cell_occupied_by_bomb(
 	return false
 
 
-# =========================================================
-# DANO DA EXPLOSÃO
-# =========================================================
+# ============================================================
+# DANO AO JOGADOR
+# ============================================================
 
 func damage_player_in_explosion(
 	explosion_cells: Array[Vector2i]
@@ -246,15 +315,12 @@ func damage_player_in_explosion(
 	if player.is_dead:
 		return
 
-	var player_cell = Vector2i(
+	var player_cell := Vector2i(
 		floori(
-			player.position.x
-			/ CELL_SIZE
+			player.position.x / CELL_SIZE
 		),
-
 		floori(
-			player.position.y
-			/ CELL_SIZE
+			player.position.y / CELL_SIZE
 		)
 	)
 
@@ -263,15 +329,17 @@ func damage_player_in_explosion(
 		player.die()
 
 
-# =========================================================
-# SISTEMA DE VIDAS
-# =========================================================
+# ============================================================
+# PERDEU UMA VIDA
+# ============================================================
 
 func player_lost_life():
 
 	lives -= 1
 
-	print("❤️ VIDA PERDIDA!")
+	print(
+		"❤️ VIDA PERDIDA!"
+	)
 
 	print(
 		"❤️ Vidas restantes: ",
@@ -285,12 +353,15 @@ func player_lost_life():
 	else:
 
 		print(
-			"💀 TODAS AS VIDAS "
-			+ "FORAM PERDIDAS!"
+			"💀 TODAS AS VIDAS FORAM PERDIDAS!"
 		)
 
 		restart_level()
 
+
+# ============================================================
+# RESSUSCITAR
+# ============================================================
 
 func respawn_player():
 
@@ -308,6 +379,10 @@ func respawn_player():
 	)
 
 
+# ============================================================
+# REINICIAR NÍVEL
+# ============================================================
+
 func restart_level():
 
 	print(
@@ -316,7 +391,6 @@ func restart_level():
 
 	lives = config.MAX_LIVES
 
-	# Remove bombas existentes
 	for bomb in get_tree().get_nodes_in_group(
 		"bomb"
 	):
@@ -324,8 +398,13 @@ func restart_level():
 		if is_instance_valid(bomb):
 			bomb.queue_free()
 
-	# Gera um novo mapa através
-	# do Generator + Validator
+	for power_up in get_tree().get_nodes_in_group(
+		"power_up"
+	):
+
+		if is_instance_valid(power_up):
+			power_up.queue_free()
+
 	generate_valid_map()
 
 	refresh_map()
@@ -337,16 +416,17 @@ func restart_level():
 	if player != null:
 
 		player.is_dead = false
-		player.bomb_active = false
+
+		player.bombs_used = 0
 
 		player.position = cell_to_world(
 			spawn_cell
 		)
 
 
-# =========================================================
-# DESENHO
-# =========================================================
+# ============================================================
+# DESENHAR MAPA
+# ============================================================
 
 func _draw():
 
@@ -357,7 +437,7 @@ func _draw():
 
 		for x in range(config.MAP_WIDTH):
 
-			var cell_type = map_data.get_cell(
+			var cell_type: String = map_data.get_cell(
 				x,
 				y
 			)
@@ -369,18 +449,22 @@ func _draw():
 			)
 
 
+# ============================================================
+# DESENHAR CÉLULA
+# ============================================================
+
 func draw_cell(
 	x: int,
 	y: int,
 	cell_type: String
 ):
 
-	var position = Vector2(
+	var position := Vector2(
 		x * CELL_SIZE,
 		y * CELL_SIZE
 	)
 
-	var rectangle = Rect2(
+	var rectangle := Rect2(
 		position,
 		Vector2(
 			CELL_SIZE,
@@ -388,7 +472,7 @@ func draw_cell(
 		)
 	)
 
-	var cell_color
+	var cell_color: Color
 
 	match cell_type:
 
@@ -455,22 +539,4 @@ func draw_cell(
 			0.25
 		),
 		1.0
-	)
-
-func spawn_test_power_up():
-
-	var power_up_scene = preload(
-		"res://scenes/items/PowerUp.tscn"
-	)
-
-	var power_up = power_up_scene.instantiate()
-
-	power_up.position = cell_to_world(
-		Vector2i(3, 1)
-	)
-
-	add_child(power_up)
-
-	print(
-		"🎴 Power-up de teste criado."
 	)
